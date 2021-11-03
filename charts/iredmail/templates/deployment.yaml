@@ -1,0 +1,111 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "iredmail.fullname" . }}
+  labels: {{- include "common.labels.standard" . | nindent 4 }}
+    app.kubernetes.io/component: iredmail
+    {{- if .Values.commonLabels }}
+    {{- include "common.tplvalues.render" ( dict "value" .Values.commonLabels "context" $ ) | nindent 4 }}
+    {{- end }}
+  {{- if .Values.commonAnnotations }}
+    annotations: {{- include "common.tplvalues.render" ( dict "value" .Values.commonAnnotations "context" $ ) | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels: {{- include "common.labels.matchLabels" . | nindent 6 }}
+      app.kubernetes.io/component: iredmail
+  template:
+    metadata:
+      annotations:
+        {{- if (include "iredmail.createConfigmap" .) }}
+        checksum/configuration: {{ include (print $.Template.BasePath "/iredmail/configmap.yaml") . | sha256sum }}
+        {{- end }}
+        {{- if .Values.iredmail.podAnnotations }}
+        {{- include "common.tplvalues.render" (dict "value" .Values.primary.podAnnotations "context" $) | nindent 8 }}
+        {{- end }}
+      labels: {{- include "common.labels.standard" . | nindent 8 }}
+        app.kubernetes.io/component: iredmail
+        {{- if .Values.commonLabels }}
+        {{- include "common.tplvalues.render" ( dict "value" .Values.commonLabels "context" $ ) | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "iredmail.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: HOSTNAME
+              value: {{ .Values.iredmail.hostname | quote }}
+            - name: FIRST_MAIL_DOMAIN
+              value: {{ .Values.iredmail.first_mail_domain | quote }}
+            - name: FIRST_MAIL_DOMAIN_ADMIN_PASSWORD
+              value: "changemechangeme"
+            - name: MLMMJADMIN_API_TOKEN
+              value: "changemechangeme"
+            - name: ROUNDCUBE_DES_KEY
+              value: "changemechangeme"
+          ports:
+            - name: http
+              containerPort: 80
+              protocol: TCP
+            - name: https
+              containerPort: 443
+              protocol: TCP
+            - name: smtp
+              containerPort: 25
+              protocol: TCP
+            - name: smtps
+              containerPort: 465
+              protocol: TCP
+            - name: submission
+              containerPort: 587
+              protocol: TCP
+            - name: imaptls
+              containerPort: 143
+              protocol: TCP
+            - name: imapssl
+              containerPort: 993
+              protocol: TCP
+            - name: pop3tls
+              containerPort: 110
+              protocol: TCP
+            - name: pop3ssl
+              containerPort: 995
+              protocol: TCP
+            - name: managesieve
+              containerPort: 4190
+              protocol: TCP
+          #livenessProbe:
+          #  httpGet:
+          #    path: /
+          #    port: http
+          #readinessProbe:
+          #  httpGet:
+          #    path: /
+          #    port: http
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
